@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>施設・設備維持管理 工程表</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Meiryo',sans-serif;font-size:12px;background:#f1f5f9;color:#1e293b;}
+.app{max-width:100%;padding:8px;}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.12);padding:10px 14px;margin-bottom:8px;}
+.hdr{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;}
+.hdr h1{font-size:15px;font-weight:700;}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+button{padding:4px 12px;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;}
+.btn-primary{background:#2563eb;color:#fff;}
+.btn-green{background:#059669;color:#fff;}
+.btn-gray{background:#e2e8f0;color:#475569;}
+.btn-red{background:#fee2e2;color:#b91c1c;}
+.btn-amber{background:#fef3c7;color:#92400e;}
+.btn-amber.active{background:#f59e0b;color:#fff;}
+.btn-tab{background:#e2e8f0;color:#475569;border-radius:6px;}
+.btn-tab.active{background:#2563eb;color:#fff;}
+.msg{font-size:11px;font-weight:600;}
+.msg-ok{color:#059669;}
+.msg-err{color:#dc2626;}
+.tbl-wrap{overflow:auto;max-height:75vh;border-radius:8px;border:1px solid #e2e8f0;}
+table{border-collapse:collapse;min-width:max-content;font-size:11px;}
+th,td{border-right:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:2px 6px;white-space:nowrap;}
+thead th{background:#f8fafc;font-weight:700;position:sticky;top:0;z-index:10;}
+.s0{position:sticky;left:0;z-index:3;background:#fff;}
+.s1{position:sticky;left:80px;z-index:3;background:#fff;}
+.s2{position:sticky;left:160px;z-index:2;background:#fff;}
+thead .s0,thead .s1,thead .s2{z-index:15;background:#f8fafc;}
+.ann-circle{color:#2563eb;font-weight:700;}
+.ann-daily{color:#dc2626;font-weight:700;}
+.ann-weekly{color:#d97706;font-weight:700;}
+.mon-tbl thead th{background:#f8fafc;}
+/* sticky列の基本z-index */
+.mon-tbl td.s0{z-index:3;}
+.mon-tbl td.s1{z-index:2;}
+/* 対象行：青文字、背景なし */
+.mon-tbl .tgt-row td{color:#1d4ed8;}
+.mon-tbl .tgt-row td.s0,.mon-tbl .tgt-row td.s1,.mon-tbl .tgt-row td.s2{background:#fff;}
+/* err/ok 行も文字色は青（背景なし） */
+.mon-tbl .err-row-less td,.mon-tbl .err-row-over td,.mon-tbl .ok-row td{color:#1d4ed8;}
+.mon-tbl .err-row-less td.s0,.mon-tbl .err-row-less td.s1,.mon-tbl .err-row-less td.s2,
+.mon-tbl .err-row-over td.s0,.mon-tbl .err-row-over td.s1,.mon-tbl .err-row-over td.s2,
+.mon-tbl .ok-row td.s0,.mon-tbl .ok-row td.s1,.mon-tbl .ok-row td.s2{background:#fff;}
+/* 対象外行：灰色文字 */
+.mon-tbl .nml-row td{color:#94a3b8;}
+.mon-tbl .nml-row td.s0,.mon-tbl .nml-row td.s1,.mon-tbl .nml-row td.s2{background:#fff;}
+/* 種別・頻度セルはインラインcolorを使うので継承color上書きしない */
+.mon-tbl td.freq-cell{color:inherit;}
+/* 土日セル */
+.mon-tbl td.we{background:#fff1f2;}
+/* ロックセル */
+.mon-tbl td.lk{background:#fef3c7;cursor:not-allowed;}
+/* クリック可セル */
+.mon-tbl td.cc{cursor:pointer;}
+.mon-tbl td.cc:hover{background:#dbeafe;}
+/* ホバー行：行全体を黄色に。sticky列も確実に上書きするためz-indexを上げる */
+.mon-tbl tbody tr:hover td{background:#fef9c3 !important;}
+.mon-tbl tbody tr:hover td.s0{background:#fef9c3 !important;z-index:25 !important;}
+.mon-tbl tbody tr:hover td.s1{background:#fef9c3 !important;z-index:25 !important;}
+.mon-tbl tbody tr:hover td.s2{background:#fef9c3 !important;z-index:24 !important;}
+/* 列ハイライト */
+.mon-tbl td.col-hl{background:#fef9c3;}
+.mon-tbl tbody tr:hover td.col-hl{background:#fde047 !important;}
+/* 左端ステータスボーダー */
+.mon-tbl .err-row-less td.s0{border-left:3px solid #f97316;}
+.mon-tbl .err-row-over td.s0{border-left:3px solid #ef4444;}
+.mon-tbl .ok-row td.s0{border-left:3px solid #22c55e;}
+/* 点検日数チェック列 */
+.chk-cell{min-width:72px;text-align:left;white-space:nowrap;padding:2px 6px;}
+/* バッジ（設備名横） */
+.badge-less{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#fed7aa;color:#9a3412;}
+.badge-over{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#fecaca;color:#991b1b;}
+.badge-ok{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#bbf7d0;color:#14532d;}
+.badge-fixed{display:inline-block;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700;background:#e0e7ff;color:#3730a3;}
+/* 注釈コメント（日数チェック列） */
+.comment-less{font-size:10px;color:#c2410c;font-weight:600;}
+.comment-over{font-size:10px;color:#dc2626;font-weight:600;}
+.comment-ok{font-size:10px;color:#15803d;font-weight:600;}
+.ft-time td{background:#fffbeb;color:#92400e;font-weight:700;padding:2px 6px;position:sticky;bottom:20px;z-index:4;border-top:2px solid #d97706;}
+.ft-time td.s0,.ft-time td.s1,.ft-time td.s2{background:#fffbeb;position:sticky;bottom:20px;z-index:16;}
+.ft-person td{background:#eff6ff;color:#1d4ed8;font-weight:700;padding:2px 6px;position:sticky;bottom:0;z-index:4;border-top:1px solid #93c5fd;}
+.ft-person td.s0,.ft-person td.s1,.ft-person td.s2{background:#eff6ff;position:sticky;bottom:0;z-index:16;}
+.check-ok{padding:4px 12px;background:#f0fdf4;border-top:1px solid #bbf7d0;color:#15803d;font-size:11px;}
+.check-warn{padding:4px 12px;background:#fff7ed;border-top:2px solid #fed7aa;color:#9a3412;font-size:11px;}
+.lock-banner{background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:6px 12px;color:#92400e;font-size:11px;font-weight:600;margin-top:6px;}
+input[type=number]{width:60px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:4px;}
+input[type=text]{padding:2px 4px;border:1px solid #cbd5e1;border-radius:4px;}
+select{padding:2px 4px;border:1px solid #cbd5e1;border-radius:4px;font-size:11px;}
+.print-modal{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;}
+.print-box{background:#fff;border-radius:12px;padding:20px 24px;min-width:340px;max-width:90vw;}
+.print-box h3{font-size:14px;font-weight:700;margin-bottom:14px;color:#1e293b;}
+.print-box label{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;cursor:pointer;}
+.print-box .print-btns{display:flex;gap:8px;margin-top:16px;}
+/* 印刷時スタイル */
+@media print{
+  body{background:#fff;font-size:10px;}
+  .no-print{display:none !important;}
+  .app{padding:0;}
+  .card{box-shadow:none;border:none;padding:4px 0;margin-bottom:4px;}
+  #annualTab{display:none !important;}
+  #monthlyTab{display:block !important;}
+  .tbl-wrap{max-height:none;overflow:visible;border:none;}
+  .mon-tbl td.s0,.mon-tbl td.s1,.mon-tbl td.s2{position:static;}
+  thead th{position:static;}
+  .mon-tbl .ft-time td,.mon-tbl .ft-person td{position:static;}
+  .mon-tbl .nml-row{display:none;}
+  #checkPanel{display:none;}
+  #lockBanner{display:none !important;}
+  .lock-banner{display:none !important;}
+  table{page-break-inside:auto;}
+  tr{page-break-inside:avoid;}
+  .print-hide-nml .nml-row{display:none;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="card hdr">
+    <div class="row">
+      <input type="number" id="selYear" value="2026" style="width:70px;font-size:13px;font-weight:700;">
+      <h1>年度　施設・設備維持管理　工程表</h1>
+    </div>
+    <div class="row">
+      <button class="btn-tab active" onclick="switchTab('annual')">年間工程表</button>
+      <button class="btn-tab" onclick="switchTab('monthly')">月間工程表</button>
+      <button class="btn-green" onclick="handleSave()">💾 保存</button>
+      <button class="btn-gray" onclick="handleDelSave()">保存削除</button>
+      <span id="saveMsg" class="msg"></span>
+    </div>
+  </div>
+
+  <div class="card row">
+    <label class="btn-primary" style="cursor:pointer;">
+      📂 Excelファイルを読み込む (.xlsx)
+      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this)">
+    </label>
+    <button class="btn-gray" onclick="addRow()">＋ 行追加</button>
+    <button class="btn-gray" onclick="toggleRaw()">生データ確認</button>
+    <button class="btn-red" onclick="clearData()">🗑 消去</button>
+    <span id="loadMsg" class="msg"></span>
+  </div>
+
+  <div id="rawPanel" class="card" style="display:none;max-height:180px;overflow:auto;"></div>
+
+  <div id="annualTab">
+    <div class="card row">
+      <select id="filterBld" onchange="renderAnnual()"><option value="">全建物</option></select>
+      <select id="filterCat" onchange="renderAnnual()"><option value="">全カテゴリ</option></select>
+      <input type="text" id="filterKw" placeholder="キーワード検索..." oninput="renderAnnual()" style="width:160px;">
+      <span id="annCount" class="msg" style="color:#64748b;"></span>
+    </div>
+    <div class="tbl-wrap"><table id="annTable"></table></div>
+  </div>
+
+  <div id="monthlyTab" style="display:none;">
+    <div class="card">
+      <div class="row" style="margin-bottom:6px;">
+        <span style="font-weight:700;color:#475569;">表示月：</span>
+        <div class="row" id="monthBtns"></div>
+      </div>
+      <div class="row">
+        <button class="btn-amber" id="lockBtn" onclick="toggleLock()">🔓 ロックモード</button>
+        <button class="btn-gray" onclick="unlockAll()">🔓 当月ロック一斉解除</button>
+        <button class="btn-green" onclick="resetMonth()">↺ この月を再生成</button>
+        <button class="btn-red" onclick="resetAll()">🔄 全リセット</button>
+        <button class="btn-gray no-print" onclick="openPrintModal()">🖨 印刷</button>
+        <span id="monCount" class="msg" style="color:#64748b;"></span>
+      </div>
+      <div id="lockBanner" class="lock-banner" style="display:none;">🔒 ロックモード中：〇セルをクリックでロック／解除</div>
+    </div>
+    <div style="display:flex;flex-direction:column;max-height:75vh;background:#fff;border-radius:10px;border:1px solid #e2e8f0;overflow:hidden;">
+      <div style="overflow:auto;flex:1;" id="monScroll">
+        <table class="mon-tbl" id="monTable"></table>
+      </div>
+      <div id="checkPanel"></div>
+    </div>
+  </div>
+</div>
+
+<div id="printModal" class="print-modal" style="display:none;">
+  <div class="print-box">
+    <h3>🖨 印刷設定</h3>
+    <label><input type="checkbox" id="prtOnlyTgt" checked> 点検対象外の行を非表示にする</label>
+    <label><input type="checkbox" id="prtHideChk"> 日数チェック列を非表示にする</label>
+    <label><input type="checkbox" id="prtHideTime"> 時間h・人数列を非表示にする</label>
+    <div style="margin-top:10px;padding:8px;background:#f8fafc;border-radius:6px;font-size:11px;color:#64748b;">
+      ※ 用紙サイズ・余白・横縦向きはブラウザの印刷ダイアログで設定してください。<br>
+      　 横向き・余白なしにすると多くの列を1ページに収めやすくなります。
+    </div>
+    <div class="print-btns">
+      <button class="btn-primary" onclick="execPrint()">印刷実行</button>
+      <button class="btn-gray" onclick="closePrintModal()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var MONTHS=['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+var MONTH_KEYS=['m4','m5','m6','m7','m8','m9','m10','m11','m12','m1','m2','m3'];
+var MONTH_NUMS=[4,5,6,7,8,9,10,11,12,1,2,3];
+var DAYS_JP=['日','月','火','水','木','金','土'];
+var FREQ_OPT=['毎日','毎週','1回/日','2回/日','1回/週','1回/月','1回/3ヶ月','2回/年','3回/年','4回/年','6回/年','12回/年','1回/年','1回/3年','随時','-'];
+
+var rows=[], sched={}, locked={}, vmi=null, lockMode=false, applied={}, rawGrid=[];
+
+function selYear(){return parseInt(document.getElementById('selYear').value)||2026;}
+function mkKey(rid,mi,d){return rid+'-'+mi+'-'+d;}
+function getDim(mi){return new Date(MONTH_NUMS[mi]>=4?selYear():selYear()+1,MONTH_NUMS[mi],0).getDate();}
+function getDow(mi,d){return new Date(MONTH_NUMS[mi]>=4?selYear():selYear()+1,MONTH_NUMS[mi]-1,d).getDay();}
+function isWE(mi,d){var w=getDow(mi,d);return w===0||w===6;}
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function freqColor(f){
+  if(!f)return'#475569';
+  if(f==='毎日'||f.indexOf('1回/日')>=0||f.indexOf('2回/日')>=0)return'#dc2626';
+  if(f==='毎週'||f.indexOf('週')>=0)return'#d97706';
+  return'#2563eb';
+}
+function setMsg(id,txt,type){
+  var el=document.getElementById(id);
+  el.textContent=txt;
+  el.className='msg'+(type==='ok'?' msg-ok':type==='err'?' msg-err':'');
+}
+
+function autoSchedule(row,mi){
+  if(!row[MONTH_KEYS[mi]])return{};
+  var mn=MONTH_NUMS[mi],yr=mn>=4?selYear():selYear()+1;
+  var dim=new Date(yr,mn,0).getDate();
+  var res={};
+  var freq=row.freq||'-';
+  if(freq==='毎日'||freq==='1回/日'||freq==='2回/日'){
+    for(var d=1;d<=dim;d++)res[d]=1;
+  }else if(freq==='毎週'||freq==='1回/週'){
+    for(var d=1;d<=dim;d++){var dw=new Date(yr,mn-1,d).getDay();if(dw===1)res[d]=1;}
+  }else{
+    var wd=[],we=[];
+    for(var d=1;d<=dim;d++){var dw=new Date(yr,mn-1,d).getDay();if(dw===0||dw===6)we.push(d);else wd.push(d);}
+    var tot=parseInt(row.days)||1;
+    var wec=Math.min(parseInt(row.weekend)||0,we.length,tot);
+    var wdc=Math.min(tot-wec,wd.length);
+    function place(arr,n){
+      if(n<=0||!arr.length)return;
+      var step=arr.length/n;
+      for(var i=0;i<n;i++){var idx=Math.min(Math.floor(i*step+step/2),arr.length-1);res[arr[idx]]=1;}
+    }
+    place(wd,wdc);place(we,wec);
+  }
+  return res;
+}
+
+function optimizeSchedule(mi,initSched){
+  var mn=MONTH_NUMS[mi],yr=mn>=4?selYear():selYear()+1;
+  var dim=new Date(yr,mn,0).getDate();
+  var wdays=[],wends=[];
+  for(var d=1;d<=dim;d++){var dw=new Date(yr,mn-1,d).getDay();if(dw===0||dw===6)wends.push(d);else wdays.push(d);}
+  var wdL={},weL={};
+  wdays.forEach(function(d){wdL[d]=0;});
+  wends.forEach(function(d){weL[d]=0;});
+  function iswe(d){var dw=new Date(yr,mn-1,d).getDay();return dw===0||dw===6;}
+  function getL(d){return iswe(d)?(weL[d]||0):(wdL[d]||0);}
+  function addL(d,v){if(iswe(d))weL[d]=(weL[d]||0)+v;else wdL[d]=(wdL[d]||0)+v;}
+  var out={};
+  var FIXED=['毎日','1回/日','2回/日','毎週','1回/週'];
+  rows.forEach(function(r){
+    if(!r[MONTH_KEYS[mi]]||FIXED.indexOf(r.freq||'-')<0)return;
+    for(var d=1;d<=dim;d++){if(initSched[mkKey(r.id,mi,d)]){out[mkKey(r.id,mi,d)]=1;addL(d,parseFloat(r.inspTime)||0);}}
+  });
+  function pickEven(arr,n){
+    if(n<=0||!arr.length)return[];
+    var cnt=Math.min(n,arr.length),step=arr.length/cnt,picked=[];
+    for(var i=0;i<cnt;i++){
+      var lo=Math.floor(i*step),hi=Math.min(Math.floor((i+1)*step),arr.length)-1,best=arr[lo];
+      for(var j=lo;j<=hi;j++)if(getL(arr[j])<getL(best))best=arr[j];
+      picked.push(best);
+    }
+    return picked;
+  }
+  rows.forEach(function(r){
+    if(!r[MONTH_KEYS[mi]]||FIXED.indexOf(r.freq||'-')>=0)return;
+    var tot=parseInt(r.days)||1;
+    var wec=Math.min(parseInt(r.weekend)||0,wends.length,tot);
+    var wdc=Math.min(tot-wec,wdays.length);
+    var time=parseFloat(r.inspTime)||0;
+    var lkd=[];
+    for(var d=1;d<=dim;d++){if(locked[mkKey(r.id,mi,d)]){lkd.push(d);addL(d,time);out[mkKey(r.id,mi,d)]=1;}}
+    var lkWD=lkd.filter(function(d){return !iswe(d);}).length;
+    var lkWE=lkd.filter(function(d){return iswe(d);}).length;
+    var avWD=wdays.filter(function(d){return !locked[mkKey(r.id,mi,d)];});
+    var avWE=wends.filter(function(d){return !locked[mkKey(r.id,mi,d)];});
+    var pWD=pickEven(avWD,Math.max(0,wdc-lkWD));
+    var pWE=pickEven(avWE,Math.max(0,wec-lkWE));
+    pWD.concat(pWE).forEach(function(d){out[mkKey(r.id,mi,d)]=1;addL(d,time);});
+  });
+  return out;
+}
+
+function buildAndApply(mi){
+  var init={};
+  var dim=getDim(mi);
+  rows.forEach(function(r){
+    for(var d=1;d<=dim;d++)if(locked[mkKey(r.id,mi,d)])init[mkKey(r.id,mi,d)]=1;
+    var a=autoSchedule(r,mi);
+    Object.keys(a).forEach(function(d){if(!locked[mkKey(r.id,mi,parseInt(d))])init[mkKey(r.id,mi,parseInt(d))]=1;});
+  });
+  var opt=optimizeSchedule(mi,init);
+  Object.keys(sched).forEach(function(k){var p=k.split('-');if(parseInt(p[1])===mi)delete sched[k];});
+  Object.keys(opt).forEach(function(k){sched[k]=opt[k];});
+}
+
+function handleFile(input){
+  var file=input.files[0];if(!file)return;
+  setMsg('loadMsg','読み込み中...','');
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(e.target.result,{type:'array'});
+      var ws=wb.Sheets[wb.SheetNames[0]];
+      var range=XLSX.utils.decode_range(ws['!ref']||'A1');
+      var merges=ws['!merges']||[];
+      var mm={};
+      merges.forEach(function(m){
+        var cell=ws[XLSX.utils.encode_cell({r:m.s.r,c:m.s.c})];
+        var val=cell?String(cell.v==null?'':cell.v).trim():'';
+        for(var r=m.s.r;r<=m.e.r;r++)for(var c=m.s.c;c<=m.e.c;c++)mm[r+'-'+c]=val;
+      });
+      rawGrid=[];
+      for(var r=range.s.r;r<=range.e.r;r++){
+        var row=[];
+        for(var c=range.s.c;c<=range.e.c;c++){
+          var k=r+'-'+c;
+          if(mm[k]!==undefined)row.push(mm[k]);
+          else{var cell=ws[XLSX.utils.encode_cell({r:r,c:c})];row.push(cell?String(cell.v==null?'':cell.v).trim():'');}
+        }
+        rawGrid.push(row);
+      }
+      rows=parseGrid(rawGrid);
+      sched={};applied={};locked={};
+      setMsg('loadMsg',rows.length>0?rows.length+'件読み込み完了':'データを認識できませんでした',rows.length>0?'ok':'err');
+      refreshAll();
+    }catch(ex){setMsg('loadMsg','エラー: '+ex.message,'err');}
+    input.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseGrid(grid){
+  var out=[],id=1,hdr=-1;
+  for(var i=0;i<Math.min(grid.length,10);i++){
+    if(grid[i].join('').indexOf('点検時間')>=0||grid[i].join('').indexOf('人数')>=0){hdr=i;break;}
+  }
+  var start=hdr>=0?hdr+1:1;
+  for(var ri=start;ri<grid.length;ri++){
+    var row=grid[ri];
+    if(!row||row.every(function(c){return c==='';}))continue;
+    var it=parseFloat(row[6]),ps=parseFloat(row[7]);
+    if(!(it>0)&&!(ps>0))continue;
+    var fv=row[5]||'-';
+    var isD=(fv.indexOf('日')>=0&&fv.indexOf('点検')<0)||fv==='毎日';
+    var isW=(fv.indexOf('週')>=0&&fv.indexOf('点検')<0)||fv==='毎週';
+    var mf=MONTH_KEYS.map(function(_,mi){var v=row[10+mi]||'';return v.indexOf('〇')>=0||v.indexOf('○')>=0||v==='1';});
+    var r={id:id++,business:row[0]||'',building:row[1]||'',category:row[2]||'',
+      itemName:row[3]||'',inspType:row[4]||'',freq:fv,
+      inspTime:it||0,persons:ps||1,days:parseInt(row[8])||1,weekend:parseInt(row[9])||0};
+    MONTH_KEYS.forEach(function(k,mi){r[k]=(isD||isW)?true:mf[mi];});
+    out.push(r);
+  }
+  return out;
+}
+
+function renderAnnual(){
+  var bld=document.getElementById('filterBld').value;
+  var cat=document.getElementById('filterCat').value;
+  var kw=document.getElementById('filterKw').value.toLowerCase();
+  var filtered=rows.filter(function(r){
+    if(bld&&r.building!==bld)return false;
+    if(cat&&r.category!==cat)return false;
+    if(kw&&(r.itemName+r.inspType+r.freq+r.business).toLowerCase().indexOf(kw)<0)return false;
+    return true;
+  });
+  document.getElementById('annCount').textContent=filtered.length+'件 / 全'+rows.length+'件';
+  var bldSet={},catSet={};
+  rows.forEach(function(r){if(r.building)bldSet[r.building]=1;if(!bld||r.building===bld){if(r.category)catSet[r.category]=1;}});
+  var blds=Object.keys(bldSet);
+  var cats=Object.keys(catSet);
+  var bldSel=document.getElementById('filterBld'),curBld=bldSel.value;
+  bldSel.innerHTML='<option value="">全建物</option>'+blds.map(function(b){return '<option value="'+esc(b)+'"'+(b===curBld?' selected':'')+'>'+esc(b)+'</option>';}).join('');
+  var catSel=document.getElementById('filterCat'),curCat=catSel.value;
+  catSel.innerHTML='<option value="">全カテゴリ</option>'+cats.map(function(c){return '<option value="'+esc(c)+'"'+(c===curCat?' selected':'')+'>'+esc(c)+'</option>';}).join('');
+  var mths=MONTHS.map(function(m){return '<th>'+m+'</th>';}).join('');
+  var html='<thead><tr>'
+    +'<th class="s0" style="min-width:90px">業務名</th>'
+    +'<th class="s1" style="min-width:80px">建物</th>'
+    +'<th style="min-width:80px">カテゴリ</th>'
+    +'<th style="min-width:180px">設備名・項目</th>'
+    +'<th style="min-width:90px">点検種別</th>'
+    +'<th style="min-width:70px">頻度</th>'
+    +'<th>時間h</th><th>人数</th><th>日数</th><th>土日祝</th>'
+    +mths+'<th>操作</th></tr></thead><tbody>';
+  filtered.forEach(function(row,ni){
+    var bg=ni%2===0?'':'background:#f8fafc;';
+    var fc=freqColor(row.freq);
+    var mCells=MONTH_KEYS.map(function(k,mi){
+      var on=row[k];
+      var lbl='';
+      if(on){
+        if(row.freq==='毎日')lbl='<span class="ann-daily">毎</span>';
+        else if(row.freq==='毎週')lbl='<span class="ann-weekly">週</span>';
+        else lbl='<span class="ann-circle">〇</span>';
+      }
+      return '<td class="'+(on?'ann-mon-on':'')+'" onclick="toggleMon('+row.id+',\''+k+'\')" style="cursor:pointer;text-align:center;background:'+(on?'#eff6ff':'')+'">'+lbl+'</td>';
+    }).join('');
+    html+='<tr style="'+bg+'">'
+      +'<td class="s0" style="'+bg+'">'+esc(row.business)+'</td>'
+      +'<td class="s1" style="'+bg+'">'+esc(row.building)+'</td>'
+      +'<td>'+esc(row.category)+'</td>'
+      +'<td><b>'+esc(row.itemName)+'</b></td>'
+      +'<td>'+esc(row.inspType)+'</td>'
+      +'<td style="color:'+fc+';font-weight:700">'+esc(row.freq)+'</td>'
+      +'<td style="text-align:center">'+row.inspTime+'h</td>'
+      +'<td style="text-align:center">'+row.persons+'名</td>'
+      +'<td style="text-align:center">'+row.days+'日</td>'
+      +'<td style="text-align:center">'+row.weekend+'</td>'
+      +mCells
+      +'<td style="text-align:center">'
+      +'<button class="btn-gray" onclick="startEdit('+row.id+')">編集</button> '
+      +'<button class="btn-red" onclick="deleteRow('+row.id+')">削除</button>'
+      +'</td></tr>';
+  });
+  document.getElementById('annTable').innerHTML=html+'</tbody>';
+}
+
+function toggleMon(id,k){
+  var r=rows.find(function(r){return r.id===id;});if(!r)return;
+  r[k]=!r[k];renderAnnual();
+}
+
+function renderMonthly(){
+  if(vmi===null)return;
+  var dim=getDim(vmi);
+  var days=[];for(var i=1;i<=dim;i++)days.push(i);
+  var yr=MONTH_NUMS[vmi]>=4?selYear():selYear()+1;
+  var tgtCount=rows.filter(function(r){return r[MONTH_KEYS[vmi]];}).length;
+  document.getElementById('monCount').textContent=tgtCount+'件対象 / 全'+rows.length+'件';
+  var FIXED=['毎日','1回/日','2回/日','毎週','1回/週'];
+  var errs={};
+  rows.forEach(function(r){
+    if(!r[MONTH_KEYS[vmi]]||FIXED.indexOf(r.freq||'-')>=0)return;
+    var exp=parseInt(r.days)||1,act=0;
+    for(var d=1;d<=dim;d++)if(sched[mkKey(r.id,vmi,d)])act++;
+    // 対象行は act/exp を常に記録（OK含む）
+    errs[r.id]={act:act,exp:exp,over:act>exp,less:act<exp,ok:act===exp};
+  });
+  var dayHdrs=days.map(function(d){
+    var dw=getDow(vmi,d),we=isWE(vmi,d);
+    var col=dw===0?'#ef4444':dw===6?'#3b82f6':'#334155';
+    return '<th class="'+(we?'we':'')+'" style="text-align:center;min-width:26px;padding:2px 0;">'
+      +'<div style="font-weight:700;color:'+col+'">'+d+'</div>'
+      +'<div style="color:#94a3b8;font-weight:400">'+DAYS_JP[dw]+'</div></th>';
+  }).join('');
+  var html='<thead><tr>'
+    +'<th class="s0" style="min-width:80px">業務名</th>'
+    +'<th class="s1" style="min-width:80px">建物</th>'
+    +'<th class="s2" style="min-width:160px">設備名・項目</th>'
+    +'<th style="min-width:80px">種別・頻度</th>'
+    +'<th style="min-width:44px;text-align:center">時間h</th>'
+    +'<th style="min-width:44px;text-align:center">人数</th>'
+    +'<th class="chk-cell">日数チェック</th>'
+    +dayHdrs+'</tr></thead><tbody>';
+  rows.forEach(function(row){
+    var isTgt=!!row[MONTH_KEYS[vmi]];
+    var e=errs[row.id];
+    var rowCls='';
+    var badge='';
+    var chkCell='';
+    if(isTgt&&e){
+      if(e.over){
+        rowCls='err-row-over';
+        badge='<span class="badge-over">▲'+e.act+'/'+e.exp+'日</span>';
+        chkCell='<td class="chk-cell"><span class="comment-over">⚠ '+(e.act-e.exp)+'個多い</span></td>';
+      }else if(e.less){
+        rowCls='err-row-less';
+        badge='<span class="badge-less">▼'+e.act+'/'+e.exp+'日</span>';
+        chkCell='<td class="chk-cell"><span class="comment-less">⚠ あと'+(e.exp-e.act)+'個必要</span></td>';
+      }else{
+        rowCls='ok-row';
+        badge='<span class="badge-ok">✓'+e.act+'日</span>';
+        chkCell='<td class="chk-cell"><span class="comment-ok">✓ OK</span></td>';
+      }
+    }else if(isTgt){
+      rowCls='tgt-row';
+      badge='<span class="badge-fixed">固定</span>';
+      chkCell='<td class="chk-cell"></td>';
+    }else{
+      rowCls='nml-row';
+      chkCell='<td class="chk-cell"></td>';
+    }
+    var cells=days.map(function(d){
+      var key=mkKey(row.id,vmi,d);
+      var on=!!sched[key],lk=!!locked[key],we=isWE(vmi,d);
+      var cls=lk?'lk':('cc'+(we?' we':''));
+      var circ=on?(lk?'<span style="color:#d97706;font-weight:700">〇</span>':'<span style="color:#1d4ed8;font-weight:700">〇</span>'):'';
+      var lkIco=lk?'<span style="position:absolute;top:0;right:0;font-size:9px;color:#f59e0b">🔒</span>':'';
+      return '<td class="'+cls+'" style="text-align:center;position:relative;padding:2px 0;" onclick="toggleDay('+row.id+','+d+')">'+circ+lkIco+'</td>';
+    }).join('');
+    html+='<tr class="'+rowCls+'">'
+      +'<td class="s0" style="text-align:left;">'+esc(row.business)+'</td>'
+      +'<td class="s1" style="text-align:left;">'+esc(row.building)+'</td>'
+      +'<td class="s2" style="text-align:left;"><b>'+esc(row.itemName)+'</b> '+badge+'</td>'
+      +'<td style="text-align:left;color:'+(isTgt?freqColor(row.freq):'#94a3b8')+';font-weight:700;">'+esc(row.inspType)+(row.inspType&&row.freq?' ':'')+esc(row.freq)+'</td>'
+      +'<td style="text-align:center;">'+row.inspTime+'h</td>'
+      +'<td style="text-align:center;">'+row.persons+'名</td>'
+      +chkCell
+      +cells+'</tr>';
+  });
+
+
+  var errList=Object.keys(errs).filter(function(id){return !errs[id].ok;});
+  var lessList=Object.keys(errs).filter(function(id){return errs[id].less;});
+  var overList=Object.keys(errs).filter(function(id){return errs[id].over;});
+  var cp=document.getElementById('checkPanel');
+  if(errList.length>0){
+    cp.className='check-warn';
+    var msg='<b>⚠ 〇の数が日数と一致しない項目：</b>';
+    if(lessList.length>0){
+      msg+='<br><span style="color:#9a3412">【不足】</span>'+lessList.map(function(id){
+        var e=errs[id],r=rows.find(function(r){return r.id===parseInt(id);});
+        return r?'<span style="margin-left:8px;background:#fed7aa;padding:0 4px;border-radius:3px">['+esc(r.building)+'] '+esc(r.itemName)+'：'+e.act+'個（予定'+e.exp+'個 / あと'+(e.exp-e.act)+'個）</span>':'';
+      }).join('');
+    }
+    if(overList.length>0){
+      msg+='<br><span style="color:#991b1b">【超過】</span>'+overList.map(function(id){
+        var e=errs[id],r=rows.find(function(r){return r.id===parseInt(id);});
+        return r?'<span style="margin-left:8px;background:#fecaca;padding:0 4px;border-radius:3px">['+esc(r.building)+'] '+esc(r.itemName)+'：'+e.act+'個（予定'+e.exp+'個 / '+(e.act-e.exp)+'個多い）</span>':'';
+      }).join('');
+    }
+    cp.innerHTML=msg;
+  }else if(rows.some(function(r){return r[MONTH_KEYS[vmi]];})){
+    cp.className='check-ok';
+    cp.innerHTML='✅ すべての点検項目の〇の数が日数と一致しています';
+  }else{cp.innerHTML='';}
+
+  var totTime=0,wdCount=0;
+  var dayTime=days.map(function(d){
+    var t=0,ph=0;
+    rows.forEach(function(r){
+      if(sched[mkKey(r.id,vmi,d)]){
+        var h=parseFloat(r.inspTime)||0,p=parseFloat(r.persons)||0;
+        t+=h;ph+=h*p;
+      }
+    });
+    if(t>0){totTime+=t;wdCount++;}
+    return{t:t,p:t>0?Math.ceil(ph/8*10)/10:0};
+  });
+  var avg=wdCount>0?Math.round(totTime/wdCount*10)/10:0;
+  var ftCols0='<td class="s0" style="min-width:80px;font-weight:700">';
+  var ftCols1='<td class="s1" style="min-width:80px;"></td>';
+  var ftSep='<td class="s2" style="min-width:160px;font-size:11px;font-weight:400;">';
+  var ftEmpty='<td style="min-width:80px"></td><td style="min-width:44px"></td><td style="min-width:44px"></td><td style="min-width:72px"></td>';
+  var dayCellsT=days.map(function(d,i){return '<td style="text-align:center;min-width:26px;padding:2px 0;">'+(dayTime[i].t>0?dayTime[i].t:'')+'</td>';}).join('');
+  var dayCellsP=days.map(function(d,i){return '<td style="text-align:center;min-width:26px;padding:2px 0;">'+(dayTime[i].p>0?dayTime[i].p:'')+'</td>';}).join('');
+
+  var tfoot='<tfoot>'
+    +'<tr class="ft-time">'+ftCols0+'作業時間合計（h）</td>'+ftCols1
+    +ftSep+'月計:'+Math.round(totTime*10)/10+'h　作業日:'+wdCount+'日　平均:'+avg+'h/日</td>'
+    +ftEmpty+dayCellsT+'</tr>'
+    +'<tr class="ft-person">'+ftCols0+'必要作業員数（名）</td>'+ftCols1
+    +'<td class="s2" style="min-width:160px"></td>'+ftEmpty+dayCellsP+'</tr>'
+    +'</tfoot>';
+
+  document.getElementById('monTable').innerHTML=html+'</tbody>'+tfoot;
+
+  // ft-person の実際の高さを計測して ft-time の bottom を合わせる
+  requestAnimationFrame(function(){
+    var fpRow=document.querySelector('#monTable .ft-person td');
+    if(fpRow){
+      var h=fpRow.getBoundingClientRect().height;
+      document.querySelectorAll('#monTable .ft-time td').forEach(function(td){
+        td.style.bottom=h+'px';
+      });
+    }
+  });
+
+  // イベント登録
+  var trs=document.getElementById('monTable').querySelectorAll('tbody tr');
+  trs.forEach(function(tr){
+    var tds=[].slice.call(tr.querySelectorAll('td'));
+    tds.forEach(function(td,ci){
+      if(ci>=7){
+        td.addEventListener('mouseenter',function(){hlCol(ci,true);});
+        td.addEventListener('mouseleave',function(){hlCol(ci,false);});
+      }
+    });
+  });
+}
+
+function hlCol(ci,on){
+  var trs=document.getElementById('monTable').querySelectorAll('tbody tr');
+  trs.forEach(function(tr){
+    var tds=[].slice.call(tr.querySelectorAll('td'));
+    if(tds[ci]){if(on)tds[ci].classList.add('col-hl');else tds[ci].classList.remove('col-hl');}
+  });
+}
+
+function toggleDay(rowId,day){
+  var key=mkKey(rowId,vmi,day);
+  if(lockMode){
+    if(!sched[key]&&!locked[key])return;
+    if(locked[key])delete locked[key];else locked[key]=1;
+  }else{
+    if(locked[key])return;
+    if(sched[key])delete sched[key];else sched[key]=1;
+  }
+  renderMonthly();
+}
+
+function selectMonth(mi){
+  vmi=mi;
+  document.querySelectorAll('.mon-btn').forEach(function(b,i){b.className='btn-tab mon-btn'+(i===mi?' active':'');});
+  if(!applied[mi]){buildAndApply(mi);applied[mi]=1;}
+  renderMonthly();
+}
+function resetMonth(){if(vmi===null)return;buildAndApply(vmi);renderMonthly();}
+function resetAll(){
+  sched={};applied={};vmi=null;
+  document.querySelectorAll('.mon-btn').forEach(function(b){b.className='btn-tab mon-btn';});
+  document.getElementById('monTable').innerHTML='';
+  document.getElementById('checkPanel').innerHTML='';
+  document.getElementById('footerTime').innerHTML='';
+  document.getElementById('footerPerson').innerHTML='';
+}
+function unlockAll(){
+  if(vmi===null)return;
+  var dim=getDim(vmi);
+  rows.forEach(function(r){for(var d=1;d<=dim;d++)delete locked[mkKey(r.id,vmi,d)];});
+  renderMonthly();
+}
+function toggleLock(){
+  lockMode=!lockMode;
+  var btn=document.getElementById('lockBtn');
+  btn.className='btn-amber'+(lockMode?' active':'');
+  btn.textContent=lockMode?'🔒 ロックモードON（終了）':'🔓 ロックモード';
+  document.getElementById('lockBanner').style.display=lockMode?'block':'none';
+}
+
+// ストレージをlocalStorageにフォールバック（window.storageがない環境用）
+function getStorage(){
+  if(window.storage)return window.storage;
+  return{
+    set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}return Promise.resolve({key:k,value:v});},
+    get:function(k){var v=null;try{v=localStorage.getItem(k);}catch(e){}return Promise.resolve(v!=null?{key:k,value:v}:null);},
+    delete:function(k){try{localStorage.removeItem(k);}catch(e){}return Promise.resolve({key:k,deleted:true});}
+  };
+}
+
+function handleSave(){
+  var st=getStorage();
+  Promise.all([
+    st.set('koute-rows',JSON.stringify({rows:rows,selYear:selYear()})),
+    st.set('koute-sched',JSON.stringify(sched)),
+    st.set('koute-locked',JSON.stringify(locked))
+  ]).then(function(){
+    setMsg('saveMsg','✅ 保存しました（'+rows.length+'件）','ok');
+    setTimeout(function(){setMsg('saveMsg','','');},3000);
+  }).catch(function(e){
+    setMsg('saveMsg','❌ 失敗: '+(e?e.message:''),'err');
+    setTimeout(function(){setMsg('saveMsg','','');},3000);
+  });
+}
+function handleDelSave(){
+  if(!confirm('保存データを削除しますか？'))return;
+  var st=getStorage();
+  Promise.all([
+    st.delete('koute-rows'),
+    st.delete('koute-sched'),
+    st.delete('koute-locked')
+  ]).then(function(){
+    setMsg('saveMsg','🗑 削除しました','');
+    setTimeout(function(){setMsg('saveMsg','','');},3000);
+  }).catch(function(){});
+}
+function loadSaved(){
+  var st=getStorage();
+  st.get('koute-rows').then(function(r1){
+    if(r1&&r1.value){
+      var p=JSON.parse(r1.value);
+      if(p.rows){rows=p.rows;if(p.selYear)document.getElementById('selYear').value=p.selYear;setMsg('loadMsg','保存データを復元（'+rows.length+'件）','ok');}
+    }
+  }).catch(function(){}).then(function(){
+    return st.get('koute-sched');
+  }).then(function(r2){
+    if(r2&&r2.value)sched=JSON.parse(r2.value);
+    return st.get('koute-locked');
+  }).then(function(r3){
+    if(r3&&r3.value)locked=JSON.parse(r3.value);
+    refreshAll();
+  }).catch(function(){refreshAll();});
+}
+
+function addRow(){
+  var id=Date.now();
+  var r={id:id,business:'',building:'',category:'',itemName:'',inspType:'',freq:'-',inspTime:0,persons:1,days:1,weekend:0};
+  MONTH_KEYS.forEach(function(k){r[k]=false;});
+  rows.push(r);startEdit(id);
+}
+function startEdit(id){
+  var row=rows.find(function(r){return r.id===id;});if(!row)return;
+  var mChecks=MONTH_KEYS.map(function(k,mi){
+    return '<label style="margin-right:4px"><input type="checkbox" data-mk="'+k+'"'+(row[k]?' checked':'')+'>'+MONTHS[mi]+'</label>';
+  }).join('');
+  var fOpts=FREQ_OPT.map(function(f){return '<option'+(f===row.freq?' selected':'')+'>'+esc(f)+'</option>';}).join('');
+  var tRows='';
+  [{l:'業務名',k:'business'},{l:'建物',k:'building'},{l:'カテゴリ',k:'category'},{l:'設備名・項目',k:'itemName'},{l:'点検種別',k:'inspType'}].forEach(function(f){
+    tRows+='<tr><td style="padding:4px 8px;font-weight:700;white-space:nowrap">'+f.l+'</td>'
+      +'<td style="padding:4px"><input type="text" id="ef_'+f.k+'" value="'+esc(row[f.k])+'" style="width:100%;padding:4px;border:1px solid #cbd5e1;border-radius:4px;"></td></tr>';
+  });
+  tRows+='<tr><td style="padding:4px 8px;font-weight:700">頻度</td>'
+    +'<td style="padding:4px"><select id="ef_freq" style="width:100%;padding:4px;border:1px solid #cbd5e1;border-radius:4px;">'+fOpts+'</select></td></tr>';
+  [{l:'点検時間h',k:'inspTime'},{l:'人数',k:'persons'},{l:'日数',k:'days'},{l:'土日祝作業数',k:'weekend'}].forEach(function(f){
+    tRows+='<tr><td style="padding:4px 8px;font-weight:700;white-space:nowrap">'+f.l+'</td>'
+      +'<td style="padding:4px"><input type="number" id="ef_'+f.k+'" value="'+row[f.k]+'" style="width:100%;padding:4px;border:1px solid #cbd5e1;border-radius:4px;"></td></tr>';
+  });
+  tRows+='<tr><td style="padding:4px 8px;font-weight:700;vertical-align:top">実施月</td><td style="padding:4px">'+mChecks+'</td></tr>';
+  var html='<div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center;">'
+    +'<div style="background:#fff;border-radius:12px;padding:20px;min-width:480px;max-width:90vw;max-height:90vh;overflow:auto;">'
+    +'<h3 style="margin-bottom:12px;font-size:14px;">点検項目の編集</h3>'
+    +'<table style="border-collapse:collapse;width:100%;font-size:12px;">'+tRows+'</table>'
+    +'<div style="margin-top:12px;display:flex;gap:8px;">'
+    +'<button class="btn-primary" onclick="saveEdit('+id+')">保存</button>'
+    +'<button class="btn-gray" onclick="closeEdit()">キャンセル</button>'
+    +'</div></div></div>';
+  var d=document.createElement('div');d.id='editModal';d.innerHTML=html;document.body.appendChild(d);
+}
+function saveEdit(id){
+  var row=rows.find(function(r){return r.id===id;});if(!row)return;
+  ['business','building','category','itemName','inspType'].forEach(function(k){
+    var el=document.getElementById('ef_'+k);if(el)row[k]=el.value;
+  });
+  var fe=document.getElementById('ef_freq');if(fe)row.freq=fe.value;
+  ['inspTime','persons','days','weekend'].forEach(function(k){
+    var el=document.getElementById('ef_'+k);if(el)row[k]=parseFloat(el.value)||0;
+  });
+  var cbs=document.querySelectorAll('#editModal input[type=checkbox]');
+  MONTH_KEYS.forEach(function(k,mi){if(cbs[mi])row[k]=cbs[mi].checked;});
+  closeEdit();refreshAll();
+}
+function deleteRow(id){
+  if(!confirm('削除しますか？'))return;
+  rows=rows.filter(function(r){return r.id!==id;});refreshAll();
+}
+function closeEdit(){var m=document.getElementById('editModal');if(m)m.remove();}
+
+function switchTab(t){
+  document.getElementById('annualTab').style.display=t==='annual'?'':'none';
+  document.getElementById('monthlyTab').style.display=t==='monthly'?'':'none';
+  var btns=document.querySelectorAll('.hdr .btn-tab');
+  btns[0].className='btn-tab'+(t==='annual'?' active':'');
+  btns[1].className='btn-tab'+(t==='monthly'?' active':'');
+}
+function toggleRaw(){
+  var p=document.getElementById('rawPanel');
+  if(p.style.display==='none'){
+    if(!rawGrid.length){alert('データがありません');return;}
+    var h='<table style="border-collapse:collapse;font-size:10px;"><thead><tr><th style="border:1px solid #e2e8f0;padding:1px 4px">#</th>'
+      +rawGrid[0].map(function(_,ci){return '<th style="border:1px solid #e2e8f0;padding:1px 4px">'+ci+'</th>';}).join('')
+      +'</tr></thead><tbody>'
+      +rawGrid.slice(0,30).map(function(row,ri){
+        return '<tr'+(ri%2?' style="background:#f8fafc"':'')+'>'
+          +'<td style="border:1px solid #e2e8f0;padding:1px 4px;color:#94a3b8">'+ri+'</td>'
+          +row.map(function(c){
+            var hi=c.indexOf('〇')>=0||c.indexOf('○')>=0;
+            return '<td style="border:1px solid #e2e8f0;padding:1px 4px;'+(hi?'background:#dbeafe;color:#1d4ed8;font-weight:700':'')+'">'+(esc(c)||'')+'</td>';
+          }).join('')+'</tr>';
+      }).join('')+'</tbody></table>';
+    p.innerHTML=h;p.style.display='';
+  }else{p.style.display='none';}
+}
+function clearData(){
+  if(!confirm('データを消去しますか？'))return;
+  rows=[];sched={};applied={};locked={};rawGrid=[];
+  setMsg('loadMsg','','');refreshAll();
+}
+function refreshAll(){
+  var mb=document.getElementById('monthBtns');
+  mb.innerHTML=MONTHS.map(function(m,i){
+    return '<button class="btn-tab mon-btn'+(vmi===i?' active':'')+'" onclick="selectMonth('+i+')">'+m+'</button>';
+  }).join('');
+  renderAnnual();
+  if(vmi!==null)renderMonthly();
+}
+
+loadSaved();
+
+function openPrintModal(){
+  if(vmi===null){alert('印刷する月を先に選択してください。');return;}
+  document.getElementById('printModal').style.display='flex';
+}
+function closePrintModal(){
+  document.getElementById('printModal').style.display='none';
+  // 印刷用クラスを元に戻す
+  document.getElementById('monTable').classList.remove('print-hide-nml');
+  var chkEls=document.querySelectorAll('#monTable .chk-cell');
+  chkEls.forEach(function(el){el.style.display='';});
+  var timeCols=document.querySelectorAll('#monTable .prt-time-hide');
+  timeCols.forEach(function(el){el.classList.remove('prt-time-hide');el.style.display='';});
+}
+function execPrint(){
+  var onlyTgt=document.getElementById('prtOnlyTgt').checked;
+  var hideChk=document.getElementById('prtHideChk').checked;
+  var hideTime=document.getElementById('prtHideTime').checked;
+  var tbl=document.getElementById('monTable');
+
+  // 対象外行の表示制御
+  if(onlyTgt){
+    tbl.querySelectorAll('tbody tr.nml-row').forEach(function(tr){tr.style.display='none';});
+  }
+  // チェック列の非表示
+  if(hideChk){
+    tbl.querySelectorAll('.chk-cell').forEach(function(el){el.style.display='none';});
+  }
+  // 時間h・人数列の非表示（4・5列目 = index 3,4 in 0-based after s0,s1,s2,freq）
+  if(hideTime){
+    tbl.querySelectorAll('tr').forEach(function(tr){
+      var tds=[].slice.call(tr.querySelectorAll('th,td'));
+      // 時間h=4番目(index3)、人数=5番目(index4) ※業務名(0)建物(1)設備名(2)種別(3)時間(4)人数(5)
+      [4,5].forEach(function(ci){if(tds[ci])tds[ci].style.display='none';});
+    });
+  }
+
+  document.getElementById('printModal').style.display='none';
+
+  // 印刷タイトルを一時設定
+  var prevTitle=document.title;
+  var mn=MONTHS[vmi];
+  var yr=MONTH_NUMS[vmi]>=4?selYear():selYear()+1;
+  document.title=selYear()+'年度 '+yr+'年'+mn+' 月間工程表';
+
+  window.print();
+
+  // 印刷後に元に戻す
+  setTimeout(function(){
+    document.title=prevTitle;
+    tbl.querySelectorAll('tbody tr.nml-row').forEach(function(tr){tr.style.display='';});
+    tbl.querySelectorAll('.chk-cell').forEach(function(el){el.style.display='';});
+    tbl.querySelectorAll('tr').forEach(function(tr){
+      var tds=[].slice.call(tr.querySelectorAll('th,td'));
+      [4,5].forEach(function(ci){if(tds[ci])tds[ci].style.display='';});
+    });
+  },1000);
+}
+</script>
+</body>
+</html>
